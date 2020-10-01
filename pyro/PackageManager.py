@@ -119,7 +119,7 @@ class PackageManager:
 
         return test_path if os.path.isdir(test_path) else ''
 
-    def build_commands(self, containing_folder: str, output_path: str) -> str:
+    def build_commands(self, containing_folder: str, output_path: str, is_textures_only: bool) -> str:
         """
         Builds command for creating package with BSArch
         """
@@ -134,6 +134,11 @@ class PackageManager:
             arguments.append('-fo4')
         elif self.options.game_type == GameType.SSE:
             arguments.append('-sse')
+            
+            # SSE has an ctd bug with uncompressed textures in a bsa that
+            # has an Embed Filenames flag on it, so force it to false.
+            if is_textures_only:
+                arguments.append('-af:0x3')
         else:
             arguments.append('-tes5')
 
@@ -168,6 +173,7 @@ class PackageManager:
 
             PackageManager.log.info(f'Creating "{file_name}"...')
 
+            is_textures_only: bool = True
             for source_path in self._generate_include_paths(package_node, package_node.get('RootDir')):
                 PackageManager.log.info(f'+ "{source_path}"')
 
@@ -177,12 +183,16 @@ class PackageManager:
                 # fix target path if user passes a deeper package root (RootDir)
                 if endswith(source_path, '.pex', ignorecase=True) and not startswith(relpath, 'scripts', ignorecase=True):
                     target_path = os.path.join(self.options.temp_path, 'Scripts', relpath)
+                    is_textures_only = False
+                # detect if this package will contain only textures.
+                elif not endswith(source_path, '.dds', ignorecase=True):
+                    is_textures_only = False
 
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 shutil.copy2(source_path, target_path)
 
             # run bsarch
-            command: str = self.build_commands(self.options.temp_path, file_path)
+            command: str = self.build_commands(self.options.temp_path, file_path, is_textures_only)
             ProcessManager.run_bsarch(command)
 
             # clear temporary data
