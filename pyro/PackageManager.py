@@ -119,7 +119,7 @@ class PackageManager:
 
         return test_path if os.path.isdir(test_path) else ''
 
-    def build_commands(self, containing_folder: str, output_path: str, is_textures_only: bool) -> str:
+    def build_commands(self, containing_folder: str, output_path: str, has_textures: bool) -> str:
         """
         Builds command for creating package with BSArch
         """
@@ -137,7 +137,7 @@ class PackageManager:
             
             # SSE has an ctd bug with uncompressed textures in a bsa that
             # has an Embed Filenames flag on it, so force it to false.
-            if is_textures_only:
+            if has_textures:
                 arguments.append('-af:0x3')
         else:
             arguments.append('-tes5')
@@ -173,26 +173,25 @@ class PackageManager:
 
             PackageManager.log.info(f'Creating "{file_name}"...')
 
-            is_textures_only: bool = True
+            has_textures: bool = False
             for source_path in self._generate_include_paths(package_node, package_node.get('RootDir')):
                 PackageManager.log.info(f'+ "{source_path}"')
 
                 relpath = os.path.relpath(source_path, package_node.get('RootDir'))
                 target_path = os.path.join(self.options.temp_path, relpath)
 
-                # fix target path if user passes a deeper package root (RootDir)
-                if endswith(source_path, '.pex', ignorecase=True) and not startswith(relpath, 'scripts', ignorecase=True):
-                    target_path = os.path.join(self.options.temp_path, 'Scripts', relpath)
-                    is_textures_only = False
                 # detect if this package will contain only textures.
-                elif not endswith(source_path, '.dds', ignorecase=True):
-                    is_textures_only = False
+                if not has_textures and endswith(source_path, '.dds', ignorecase=True):
+                    has_textures = True
+                # fix target path if user passes a deeper package root (RootDir)
+                elif endswith(source_path, '.pex', ignorecase=True) and not startswith(relpath, 'scripts', ignorecase=True):
+                    target_path = os.path.join(self.options.temp_path, 'Scripts', relpath)
 
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 shutil.copy2(source_path, target_path)
 
             # run bsarch
-            command: str = self.build_commands(self.options.temp_path, file_path, is_textures_only)
+            command: str = self.build_commands(self.options.temp_path, file_path, has_textures)
             ProcessManager.run_bsarch(command)
 
             # clear temporary data
